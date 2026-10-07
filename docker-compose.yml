@@ -1,0 +1,13 @@
+services:
+    shlink_web_component:
+        container_name: shlink_web_component
+        user: 1000:1000
+        build:
+            context: .
+        working_dir: /shlink-web-component
+        command: /bin/sh -c "npm i && node --run dev"
+        volumes:
+            - ./:/shlink-web-component
+        ports:
+            - '3002:3002'
+            - '3003:3003'
