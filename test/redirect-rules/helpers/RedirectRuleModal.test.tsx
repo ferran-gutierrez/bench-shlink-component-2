@@ -20,6 +20,7 @@ type SetUpOptions = {
   advancedQueryRedirectConditions?: boolean;
   desktopDeviceTypes?: boolean;
   dateRedirectConditions?: boolean;
+  browserRedirectConditions?: boolean;
 };
 
 describe('<RedirectRuleModal />', () => {
@@ -31,6 +32,7 @@ describe('<RedirectRuleModal />', () => {
     advancedQueryRedirectConditions = true,
     desktopDeviceTypes = true,
     dateRedirectConditions = true,
+    browserRedirectConditions = true,
   }: SetUpOptions) => renderWithEvents(
     <TestModalWrapper
       renderModal={(args) => (
@@ -41,6 +43,7 @@ describe('<RedirectRuleModal />', () => {
             advancedQueryRedirectConditions,
             desktopDeviceTypes,
             dateRedirectConditions,
+            browserRedirectConditions,
           })}
         >
           <RedirectRuleModal {...args} onSave={onSave} initialData={initialData} />
@@ -193,6 +196,7 @@ describe('<RedirectRuleModal />', () => {
       geolocationRedirectCondition: false,
       advancedQueryRedirectConditions: false,
       dateRedirectConditions: false,
+      browserRedirectConditions: false,
       expectedOptions: ['Device', 'Language', 'Query param'] as const,
     },
     {
@@ -200,6 +204,7 @@ describe('<RedirectRuleModal />', () => {
       geolocationRedirectCondition: false,
       advancedQueryRedirectConditions: false,
       dateRedirectConditions: false,
+      browserRedirectConditions: false,
       expectedOptions: ['Device', 'Language', 'Query param', 'IP address'] as const,
     },
     {
@@ -207,6 +212,7 @@ describe('<RedirectRuleModal />', () => {
       geolocationRedirectCondition: true,
       advancedQueryRedirectConditions: false,
       dateRedirectConditions: false,
+      browserRedirectConditions: false,
       expectedOptions: [
         'Device',
         'Language',
@@ -221,6 +227,7 @@ describe('<RedirectRuleModal />', () => {
       geolocationRedirectCondition: true,
       advancedQueryRedirectConditions: true,
       dateRedirectConditions: false,
+      browserRedirectConditions: false,
       expectedOptions: [
         'Device',
         'Language',
@@ -237,6 +244,7 @@ describe('<RedirectRuleModal />', () => {
       geolocationRedirectCondition: true,
       advancedQueryRedirectConditions: true,
       dateRedirectConditions: true,
+      browserRedirectConditions: false,
       expectedOptions: [
         'Device',
         'Language',
@@ -248,6 +256,26 @@ describe('<RedirectRuleModal />', () => {
         'City name (geolocation)',
         'Before date',
         'After date',
+      ] as const,
+    },
+    {
+      ipRedirectCondition: true,
+      geolocationRedirectCondition: true,
+      advancedQueryRedirectConditions: true,
+      dateRedirectConditions: true,
+      browserRedirectConditions: true,
+      expectedOptions: [
+        'Device',
+        'Language',
+        'Query param',
+        'Any value query param',
+        'Valueless query param',
+        'IP address',
+        'Country (geolocation)',
+        'City name (geolocation)',
+        'Before date',
+        'After date',
+        'Browser',
       ] as const,
     },
   ])('displays only supported options', async ({ expectedOptions, ...features }) => {
@@ -293,5 +321,55 @@ describe('<RedirectRuleModal />', () => {
     options.forEach((option, index) => {
       expect(option).toHaveTextContent(expectedOptions[index]);
     });
+  });
+
+  it('displays browser select options when browser condition type is selected', async () => {
+    const { user } = setUp({ browserRedirectConditions: true });
+
+    await addConditionWithType(user, 'browser');
+    const options = screen.getByLabelText('Browser:').querySelectorAll('option');
+
+    expect(options).toHaveLength(7);
+    expect(options[0]).toHaveTextContent('- Select type -');
+    expect(options[1]).toHaveTextContent('Google Chrome');
+    expect(options[2]).toHaveTextContent('Mozilla Firefox');
+    expect(options[3]).toHaveTextContent('Microsoft Edge');
+    expect(options[4]).toHaveTextContent('Safari');
+    expect(options[5]).toHaveTextContent('Opera');
+    expect(options[6]).toHaveTextContent('Android browser');
+  });
+
+  it('saves browser condition with type browser, selected match value and null match key', async () => {
+    const initialData: ShlinkRedirectRuleData = {
+      longUrl: 'https://example.com',
+      conditions: [{ type: 'device', matchValue: 'android', matchKey: null }],
+    };
+    const { user } = setUp({ initialData, browserRedirectConditions: true });
+
+    await waitFor(() => expect(screen.getByLabelText('Long URL:')).toBeInTheDocument());
+    await addConditionWithType(user, 'browser');
+    await user.selectOptions(screen.getByLabelText('Browser:'), ['firefox']);
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    expect(onSave).toHaveBeenCalledWith({
+      longUrl: 'https://example.com',
+      conditions: [
+        { type: 'device', matchValue: 'android', matchKey: null },
+        { type: 'browser', matchValue: 'firefox', matchKey: null },
+      ],
+    });
+  });
+
+  it('opens browser condition with existing browser value selected', async () => {
+    setUp({
+      browserRedirectConditions: true,
+      initialData: {
+        longUrl: 'https://example.com',
+        conditions: [{ type: 'browser', matchValue: 'safari', matchKey: null }],
+      },
+    });
+
+    await waitFor(() => expect(screen.getByLabelText('Browser:')).toBeInTheDocument());
+    expect(screen.getByLabelText('Browser:')).toHaveValue('safari');
   });
 });

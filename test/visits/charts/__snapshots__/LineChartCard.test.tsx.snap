@@ -1105,12 +1105,12 @@ exports[`<LineChartCard /> > renders chart with expected data 3`] = `
                   stroke="none"
                   text-anchor="middle"
                   width="730"
-                  x="768.8203125"
+                  x="769.9609375"
                   y="373"
                 >
                   <tspan
                     dy="0.71em"
-                    x="768.8203125"
+                    x="769.9609375"
                   >
                     2016-05
                   </tspan>
@@ -1862,12 +1862,12 @@ exports[`<LineChartCard /> > renders chart with expected data 4`] = `
                   stroke="none"
                   text-anchor="middle"
                   width="730"
-                  x="768.8203125"
+                  x="769.9609375"
                   y="373"
                 >
                   <tspan
                     dy="0.71em"
-                    x="768.8203125"
+                    x="769.9609375"
                   >
                     2016-05
                   </tspan>
@@ -3098,12 +3098,12 @@ exports[`<LineChartCard /> > renders chart with expected data 5`] = `
                   stroke="none"
                   text-anchor="middle"
                   width="730"
-                  x="768.8203125"
+                  x="769.9609375"
                   y="373"
                 >
                   <tspan
                     dy="0.71em"
-                    x="768.8203125"
+                    x="769.9609375"
                   >
                     2024-04
                   </tspan>
