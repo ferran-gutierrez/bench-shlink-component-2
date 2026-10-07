@@ -1,4 +1,5 @@
-import { endOfDay, format, formatISO, startOfDay, subDays } from 'date-fns';
+import { endOfDay, format, formatISO, isWithinInterval, startOfDay, subDays } from 'date-fns';
+import { cdp } from 'vitest/browser';
 import { now, parseDate } from '../../../../src/utils/dates/helpers/date';
 import type { DateInterval } from '../../../../src/utils/dates/helpers/dateIntervals';
 import {
@@ -187,6 +188,160 @@ describe('date-types', () => {
 
       expect(format(startDate, 'yyyy-MM-dd HH:mm:ss')).toEqual(expectedStartDate);
       expect(format(endDate, 'yyyy-MM-dd HH:mm:ss')).toEqual(expectedEndDate);
+    });
+  });
+
+  type CdpSession = { send: (method: string, params?: object) => Promise<unknown> };
+
+  const setBrowserTimezone = async (timezoneId: string) => {
+    const session = cdp() as CdpSession;
+    await session.send('Emulation.setTimezoneOverride', { timezoneId });
+  };
+
+  const visitIsInRange = (visit: Date, range: ReturnType<typeof intervalToDateRange>) => {
+    if (!range.startDate || !range.endDate) {
+      return false;
+    }
+
+    return isWithinInterval(visit, { start: range.startDate, end: range.endDate });
+  };
+
+  describe('local timezone date intervals (REQ-1 through REQ-9)', () => {
+    afterEach(async () => {
+      await setBrowserTimezone('UTC');
+      vi.useRealTimers();
+    });
+
+    const withFixedNow = (fixedNow: Date) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(fixedNow);
+    };
+
+    it('REQ-1: today uses local start and end of the current calendar day', async () => {
+      await setBrowserTimezone('America/Los_Angeles');
+      const fixedNow = new Date('2024-06-14T17:00:00.000Z');
+      withFixedNow(fixedNow);
+
+      const { startDate, endDate } = intervalToDateRange('today');
+
+      expect(startDate).toEqual(new Date('2024-06-14T07:00:00.000Z'));
+      expect(endDate).toEqual(new Date('2024-06-15T06:59:59.999Z'));
+    });
+
+    it('REQ-2: yesterday covers the full previous local calendar day', async () => {
+      await setBrowserTimezone('America/Los_Angeles');
+      const fixedNow = new Date('2024-06-14T17:00:00.000Z');
+      withFixedNow(fixedNow);
+
+      const { startDate, endDate } = intervalToDateRange('yesterday');
+
+      expect(startDate).toEqual(new Date('2024-06-13T07:00:00.000Z'));
+      expect(endDate).toEqual(new Date('2024-06-14T06:59:59.999Z'));
+    });
+
+    it.each([
+      ['last7Days' as const, 7],
+      ['last30Days' as const, 30],
+      ['last90Days' as const, 90],
+      ['last180Days' as const, 180],
+      ['last365Days' as const, 365],
+    ])('REQ-3: %s spans local midnight N days ago through end of today', async (interval, days) => {
+      await setBrowserTimezone('America/Los_Angeles');
+      const fixedNow = new Date('2024-06-14T17:00:00.000Z');
+      withFixedNow(fixedNow);
+
+      const { startDate, endDate } = intervalToDateRange(interval);
+      const expectedStart = startOfDay(subDays(fixedNow, days));
+      const expectedEnd = endOfDay(fixedNow);
+
+      expect(startDate).toEqual(expectedStart);
+      expect(endDate).toEqual(expectedEnd);
+    });
+
+    it('REQ-4: dateToMatchingInterval uses local day boundaries', async () => {
+      await setBrowserTimezone('America/Los_Angeles');
+      const fixedNow = new Date('2024-06-14T17:00:00.000Z');
+      withFixedNow(fixedNow);
+
+      expect(dateToMatchingInterval(new Date('2024-06-14T16:00:00.000Z'))).toEqual('today');
+      expect(dateToMatchingInterval(new Date('2024-06-14T03:00:00.000Z'))).toEqual('yesterday');
+      expect(dateToMatchingInterval(new Date('2024-06-07T07:00:00.000Z'))).toEqual('last7Days');
+      expect(dateToMatchingInterval(new Date('2023-06-14T07:00:00.000Z'))).toEqual('all');
+    });
+
+    it('REQ-5: UTC timezone preserves UTC day boundaries for fixed instants', async () => {
+      await setBrowserTimezone('UTC');
+      const fixedNow = new Date('2024-06-14T10:00:00.000Z');
+      withFixedNow(fixedNow);
+
+      const utcDayStart = (date: Date) =>
+        new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+      const utcDayEnd = (date: Date) => new Date(utcDayStart(date).getTime() + 24 * 60 * 60 * 1000 - 1);
+
+      expect(intervalToDateRange('today')).toEqual({
+        startDate: utcDayStart(fixedNow),
+        endDate: utcDayEnd(fixedNow),
+      });
+      expect(intervalToDateRange('yesterday')).toEqual({
+        startDate: utcDayStart(subDays(fixedNow, 1)),
+        endDate: utcDayEnd(subDays(fixedNow, 1)),
+      });
+      expect(dateToMatchingInterval(new Date('2024-06-14T09:00:00.000Z'))).toEqual('today');
+      expect(dateToMatchingInterval(new Date('2024-06-13T23:00:00.000Z'))).toEqual('yesterday');
+    });
+
+    it.each([
+      ['2024-03-10T10:00:00.000Z', 'America/Los_Angeles spring forward'],
+      ['2024-11-03T10:00:00.000Z', 'America/Los_Angeles fall back'],
+    ])('REQ-6: today aligns to local calendar date on DST transition (%s)', async (fixedNowIso) => {
+      await setBrowserTimezone('America/Los_Angeles');
+      const fixedNow = new Date(fixedNowIso);
+      withFixedNow(fixedNow);
+
+      const { startDate, endDate } = intervalToDateRange('today');
+      const last7 = intervalToDateRange('last7Days');
+
+      expect(format(startDate!, 'yyyy-MM-dd')).toEqual(format(fixedNow, 'yyyy-MM-dd'));
+      expect(format(endDate!, 'yyyy-MM-dd')).toEqual(format(fixedNow, 'yyyy-MM-dd'));
+      expect(format(last7.startDate!, 'yyyy-MM-dd')).toEqual(format(subDays(fixedNow, 7), 'yyyy-MM-dd'));
+      expect(format(last7.endDate!, 'yyyy-MM-dd')).toEqual(format(fixedNow, 'yyyy-MM-dd'));
+    });
+
+    it('REQ-7: Los Angeles today excludes prior evening and includes same-day visits', async () => {
+      await setBrowserTimezone('America/Los_Angeles');
+      const fixedNow = new Date('2024-06-14T17:00:00.000Z');
+      withFixedNow(fixedNow);
+
+      const todayRange = intervalToDateRange('today');
+      const yesterdayRange = intervalToDateRange('yesterday');
+
+      expect(visitIsInRange(new Date('2024-06-14T16:00:00.000Z'), todayRange)).toBe(true);
+      expect(visitIsInRange(new Date('2024-06-14T03:00:00.000Z'), todayRange)).toBe(false);
+      expect(visitIsInRange(new Date('2024-06-15T01:00:00.000Z'), todayRange)).toBe(true);
+      expect(visitIsInRange(new Date('2024-06-15T01:00:00.000Z'), yesterdayRange)).toBe(false);
+    });
+
+    it('REQ-8: Auckland today and yesterday use local midnights', async () => {
+      await setBrowserTimezone('Pacific/Auckland');
+      const fixedNow = new Date('2024-06-14T20:00:00.000Z');
+      withFixedNow(fixedNow);
+
+      const todayRange = intervalToDateRange('today');
+      const yesterdayRange = intervalToDateRange('yesterday');
+
+      expect(visitIsInRange(new Date('2024-06-14T12:30:00.000Z'), todayRange)).toBe(true);
+      expect(visitIsInRange(new Date('2024-06-14T12:30:00.000Z'), yesterdayRange)).toBe(false);
+      expect(visitIsInRange(new Date('2024-06-13T14:00:00.000Z'), yesterdayRange)).toBe(true);
+    });
+
+    it('REQ-9: dateToMatchingInterval matches REQ-7 visit examples for preselection', async () => {
+      await setBrowserTimezone('America/Los_Angeles');
+      const fixedNow = new Date('2024-06-14T17:00:00.000Z');
+      withFixedNow(fixedNow);
+
+      expect(dateToMatchingInterval(new Date('2024-06-14T16:00:00.000Z'))).toEqual('today');
+      expect(dateToMatchingInterval(new Date('2024-06-14T03:00:00.000Z'))).toEqual('yesterday');
+      expect(dateToMatchingInterval(new Date('2024-06-15T01:00:00.000Z'))).toEqual('today');
     });
   });
 
