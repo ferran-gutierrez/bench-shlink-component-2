@@ -16,6 +16,8 @@ const supportedFeatures = {
 
 Object.freeze(supportedFeatures);
 
+export { supportedFeatures };
+
 export type Feature = keyof typeof supportedFeatures;
 
 const isFeatureEnabledForVersion = (feature: Feature, serverVersion: SemVerOrLatest): boolean =>
@@ -23,7 +25,7 @@ const isFeatureEnabledForVersion = (feature: Feature, serverVersion: SemVerOrLat
   // That will disable features with a maxVersion, and keep enabled those with only a minVersion
   versionMatch(serverVersion === 'latest' ? '999.99.99' : serverVersion, supportedFeatures[feature]);
 
-const getFeaturesForVersion = (serverVersion: SemVerOrLatest): Record<Feature, boolean> => ({
+export const getFeaturesForVersion = (serverVersion: SemVerOrLatest): Record<Feature, boolean> => ({
   ipRedirectCondition: isFeatureEnabledForVersion('ipRedirectCondition', serverVersion),
   geolocationRedirectCondition: isFeatureEnabledForVersion('geolocationRedirectCondition', serverVersion),
   filterShortUrlsByDomain: isFeatureEnabledForVersion('filterShortUrlsByDomain', serverVersion),
