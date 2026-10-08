@@ -203,3 +203,99 @@ describe('date-types', () => {
     });
   });
 });
+
+describe('local timezone day boundaries (bench-shlink-component-2-20261008-sfbc)', () => {
+  const laSummerNow = '2024-06-14T17:00:00.000Z';
+  const laSummerOffsetMinutes = 420;
+  const todayEndLaSummer = '2024-06-15T06:59:59.999Z';
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const useFixedTimeAndOffset = (isoNow: string, offsetMinutes: number) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(isoNow));
+    vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(offsetMinutes);
+  };
+
+  const expectIso = (date: Date | null | undefined, expectedIso: string) => {
+    expect(date?.toISOString()).toEqual(expectedIso);
+  };
+
+  it('REQ-1 intervalToDateRange(today) uses local calendar day boundaries when offset is not UTC', () => {
+    useFixedTimeAndOffset(laSummerNow, laSummerOffsetMinutes);
+
+    const { startDate, endDate } = intervalToDateRange('today');
+
+    expectIso(startDate, '2024-06-14T07:00:00.000Z');
+    expectIso(endDate, todayEndLaSummer);
+  });
+
+  it('REQ-2 intervalToDateRange(yesterday) uses the previous local calendar day', () => {
+    useFixedTimeAndOffset(laSummerNow, laSummerOffsetMinutes);
+
+    const { startDate, endDate } = intervalToDateRange('yesterday');
+
+    expectIso(startDate, '2024-06-13T07:00:00.000Z');
+    expectIso(endDate, '2024-06-14T06:59:59.999Z');
+  });
+
+  it.each([
+    ['last7Days' as const, 7, '2024-06-07T07:00:00.000Z'],
+    ['last30Days' as const, 30, '2024-05-15T07:00:00.000Z'],
+    ['last90Days' as const, 90, '2024-03-16T07:00:00.000Z'],
+    ['last180Days' as const, 180, '2023-12-17T07:00:00.000Z'],
+    ['last365Days' as const, 365, '2023-06-15T07:00:00.000Z'],
+  ])(
+    'REQ-3 intervalToDateRange(%s) spans from local midnight N days ago through end of today',
+    (interval, _daysBack, expectedStartIso) => {
+      useFixedTimeAndOffset(laSummerNow, laSummerOffsetMinutes);
+
+      const { startDate, endDate } = intervalToDateRange(interval);
+
+      expectIso(startDate, expectedStartIso);
+      expectIso(endDate, todayEndLaSummer);
+    },
+  );
+
+  it.each([
+    ['today' as const, 0, 0],
+    ['yesterday' as const, 1, 1],
+    ['last7Days' as const, 7, 0],
+    ['last30Days' as const, 30, 0],
+    ['last90Days' as const, 90, 0],
+    ['last180Days' as const, 180, 0],
+    ['last365Days' as const, 365, 0],
+  ])(
+    'REQ-4 intervalToDateRange(%s) matches date-fns startOfDay and endOfDay when offset is UTC',
+    (interval, startDaysAgo, endDaysAgo) => {
+      useFixedTimeAndOffset(laSummerNow, 0);
+
+      const referenceNow = now();
+      const expectedStart = startOfDay(subDays(referenceNow, startDaysAgo));
+      const expectedEnd = endOfDay(subDays(referenceNow, endDaysAgo));
+      const { startDate, endDate } = intervalToDateRange(interval);
+
+      expect(startDate?.getTime()).toEqual(expectedStart.getTime());
+      expect(endDate?.getTime()).toEqual(expectedEnd.getTime());
+    },
+  );
+
+  it('REQ-5 intervalToDateRange(today) covers the full local day on DST spring-forward', () => {
+    useFixedTimeAndOffset('2024-03-10T12:00:00.000Z', 480);
+
+    const { startDate, endDate } = intervalToDateRange('today');
+
+    expectIso(startDate, '2024-03-10T08:00:00.000Z');
+    expectIso(endDate, '2024-03-11T07:59:59.999Z');
+  });
+
+  it('REQ-6 dateToMatchingInterval classifies visits using local calendar-day boundaries', () => {
+    useFixedTimeAndOffset(laSummerNow, laSummerOffsetMinutes);
+
+    expect(dateToMatchingInterval('2024-06-14T16:00:00.000Z')).toEqual('today');
+    expect(dateToMatchingInterval('2024-06-14T06:00:00.000Z')).toEqual('yesterday');
+  });
+});
