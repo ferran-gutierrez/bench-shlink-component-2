@@ -95,19 +95,33 @@ export const intervalToDateRange = (interval?: DateInterval): DateRange => {
   return conditions.find(([matcher]) => matcher())?.[1]() ?? {};
 };
 
-export const dateToMatchingInterval = (date: DateOrString): DateInterval => {
-  const isoDate = parseISO(date);
-  const conditions: [() => boolean, DateInterval][] = [
-    [() => isBeforeOrEqual(startOfDaysAgo(0), isoDate), 'today'],
-    [() => isBeforeOrEqual(startOfDaysAgo(1), isoDate), 'yesterday'],
-    [() => isBeforeOrEqual(startOfDaysAgo(7), isoDate), 'last7Days'],
-    [() => isBeforeOrEqual(startOfDaysAgo(30), isoDate), 'last30Days'],
-    [() => isBeforeOrEqual(startOfDaysAgo(90), isoDate), 'last90Days'],
-    [() => isBeforeOrEqual(startOfDaysAgo(180), isoDate), 'last180Days'],
-    [() => isBeforeOrEqual(startOfDaysAgo(365), isoDate), 'last365Days'],
-  ];
+const MATCHING_INTERVALS = [
+  'today',
+  'yesterday',
+  'last7Days',
+  'last30Days',
+  'last90Days',
+  'last180Days',
+  'last365Days',
+] as const satisfies readonly DateInterval[];
 
-  return conditions.find(([matcher]) => matcher())?.[1] ?? ALL;
+export const dateToMatchingInterval = (date: DateOrString): DateInterval => {
+  const visitDay = startOfDay(parseISO(date));
+
+  for (const interval of MATCHING_INTERVALS) {
+    const { startDate, endDate } = intervalToDateRange(interval);
+    if (!startDate || !endDate) {
+      continue;
+    }
+
+    const intervalStartDay = startOfDay(startDate);
+    const intervalEndDay = startOfDay(endDate);
+    if (isBeforeOrEqual(intervalStartDay, visitDay) && isBeforeOrEqual(visitDay, intervalEndDay)) {
+      return interval;
+    }
+  }
+
+  return ALL;
 };
 
 export const toDateRange = (rangeOrInterval: DateRange | DateInterval): DateRange => {

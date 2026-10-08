@@ -60,7 +60,9 @@ describe('dateIntervals local timezone', () => {
     it('REQ-7 dateToMatchingInterval maps visit instants to local calendar intervals', () => {
       expect(dateToMatchingInterval('2024-06-14T20:00:00.000Z')).toEqual('today');
       expect(dateToMatchingInterval('2024-06-13T20:00:00.000Z')).toEqual('yesterday');
+      expect(dateToMatchingInterval('2024-06-07T07:00:00.000Z')).toEqual('last7Days');
       expect(dateToMatchingInterval('2024-06-07T20:00:00.000Z')).toEqual('last7Days');
+      expect(dateToMatchingInterval('2024-06-06T20:00:00.000Z')).toEqual('last30Days');
     });
   });
 
