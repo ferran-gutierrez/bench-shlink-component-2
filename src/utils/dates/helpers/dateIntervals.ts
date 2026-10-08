@@ -77,14 +77,33 @@ export const rangeOrIntervalToString = (range?: DateRange | DateInterval): strin
   return INTERVAL_TO_STRING_MAP[range];
 };
 
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const DAY_IN_MS = 86_400_000;
 
-const toDayStart = (date: Date): Date =>
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-const toDayEnd = (date: Date): Date => new Date(toDayStart(date).getTime() + DAY_IN_MS - 1);
+const startOfLocalDay = (date: Date, offsetMinutes: number): Date => {
+  const offsetMs = offsetMinutes * 60_000;
+  return new Date(Math.floor((date.getTime() - offsetMs) / DAY_IN_MS) * DAY_IN_MS + offsetMs);
+};
 
-const startOfDaysAgo = (daysAgo: number) => toDayStart(subDays(now(), daysAgo));
-const endOfDaysAgo = (daysAgo: number) => toDayEnd(subDays(now(), daysAgo));
+const endOfLocalDay = (date: Date, offsetMinutes: number): Date =>
+  new Date(startOfLocalDay(date, offsetMinutes).getTime() + DAY_IN_MS - 1);
+
+const startOfDaysAgo = (daysAgo: number) => {
+  const date = subDays(now(), daysAgo);
+  const referenceOffset = now().getTimezoneOffset();
+
+  return date.getTimezoneOffset() === referenceOffset
+    ? startOfDay(date)
+    : startOfLocalDay(date, referenceOffset);
+};
+
+const endOfDaysAgo = (daysAgo: number) => {
+  const date = subDays(now(), daysAgo);
+  const referenceOffset = now().getTimezoneOffset();
+
+  return date.getTimezoneOffset() === referenceOffset
+    ? endOfDay(date)
+    : endOfLocalDay(date, referenceOffset);
+};
 const endingToday = (startDate: Date): DateRange => ({ startDate, endDate: endOfDaysAgo(0) });
 
 export const intervalToDateRange = (interval?: DateInterval): DateRange => {
