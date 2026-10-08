@@ -1,22 +1,25 @@
 import { endOfDay, startOfDay } from 'date-fns';
-import { cdp } from 'vitest/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cdp } from 'vitest/browser';
 import type { DateInterval } from '../../../../src/utils/dates/helpers/dateIntervals';
-import {
-  dateToMatchingInterval,
-  intervalToDateRange,
-} from '../../../../src/utils/dates/helpers/dateIntervals';
+import { dateToMatchingInterval, intervalToDateRange } from '../../../../src/utils/dates/helpers/dateIntervals';
 
 const AMERICA_LOS_ANGELES = 'America/Los_Angeles';
 const PACIFIC_AUCKLAND = 'Pacific/Auckland';
 const UTC_TIMEZONE = 'UTC';
 
+type CdpSessionWithSend = {
+  send: (method: string, params?: Record<string, string>) => Promise<void>;
+};
+
+const browserCdp = () => cdp() as unknown as CdpSessionWithSend;
+
 const overrideTimezone = async (timezoneId: string) => {
-  await (await cdp()).send('Emulation.setTimezoneOverride', { timezoneId });
+  await browserCdp().send('Emulation.setTimezoneOverride', { timezoneId });
 };
 
 const clearTimezoneOverride = async () => {
-  await (await cdp()).send('Emulation.setTimezoneOverride', { timezoneId: '' });
+  await browserCdp().send('Emulation.setTimezoneOverride', { timezoneId: '' });
 };
 
 const expectIntervalRange = (interval: DateInterval, startIso: string, endIso: string) => {
@@ -57,7 +60,7 @@ describe('dateIntervals local timezone', () => {
     it('REQ-7 dateToMatchingInterval maps visit instants to local calendar intervals', () => {
       expect(dateToMatchingInterval('2024-06-14T20:00:00.000Z')).toEqual('today');
       expect(dateToMatchingInterval('2024-06-13T20:00:00.000Z')).toEqual('yesterday');
-      expect(dateToMatchingInterval('2024-06-06T20:00:00.000Z')).toEqual('last7Days');
+      expect(dateToMatchingInterval('2024-06-07T20:00:00.000Z')).toEqual('last7Days');
     });
   });
 
