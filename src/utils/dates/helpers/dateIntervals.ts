@@ -91,18 +91,14 @@ const startOfDaysAgo = (daysAgo: number) => {
   const date = subDays(now(), daysAgo);
   const referenceOffset = now().getTimezoneOffset();
 
-  return date.getTimezoneOffset() === referenceOffset
-    ? startOfDay(date)
-    : startOfLocalDay(date, referenceOffset);
+  return date.getTimezoneOffset() === referenceOffset ? startOfDay(date) : startOfLocalDay(date, referenceOffset);
 };
 
 const endOfDaysAgo = (daysAgo: number) => {
   const date = subDays(now(), daysAgo);
   const referenceOffset = now().getTimezoneOffset();
 
-  return date.getTimezoneOffset() === referenceOffset
-    ? endOfDay(date)
-    : endOfLocalDay(date, referenceOffset);
+  return date.getTimezoneOffset() === referenceOffset ? endOfDay(date) : endOfLocalDay(date, referenceOffset);
 };
 const endingToday = (startDate: Date): DateRange => ({ startDate, endDate: endOfDaysAgo(0) });
 
