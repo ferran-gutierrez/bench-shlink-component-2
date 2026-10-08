@@ -77,14 +77,8 @@ export const rangeOrIntervalToString = (range?: DateRange | DateInterval): strin
   return INTERVAL_TO_STRING_MAP[range];
 };
 
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
-
-const toDayStart = (date: Date): Date =>
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-const toDayEnd = (date: Date): Date => new Date(toDayStart(date).getTime() + DAY_IN_MS - 1);
-
-const startOfDaysAgo = (daysAgo: number) => toDayStart(subDays(now(), daysAgo));
-const endOfDaysAgo = (daysAgo: number) => toDayEnd(subDays(now(), daysAgo));
+const startOfDaysAgo = (daysAgo: number) => startOfDay(subDays(now(), daysAgo));
+const endOfDaysAgo = (daysAgo: number) => endOfDay(subDays(now(), daysAgo));
 const endingToday = (startDate: Date): DateRange => ({ startDate, endDate: endOfDaysAgo(0) });
 
 export const intervalToDateRange = (interval?: DateInterval): DateRange => {
