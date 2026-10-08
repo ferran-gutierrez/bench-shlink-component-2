@@ -284,12 +284,17 @@ describe('local timezone day boundaries (bench-shlink-component-2-20261008-sfbc)
   );
 
   it('REQ-5 intervalToDateRange(today) covers the full local day on DST spring-forward', () => {
-    useFixedTimeAndOffset('2024-03-10T12:00:00.000Z', 480);
+    const springForwardNow = '2024-03-10T12:00:00.000Z';
+    const laOffsetAfterSpringForward = 420;
+    useFixedTimeAndOffset(springForwardNow, laOffsetAfterSpringForward);
 
     const { startDate, endDate } = intervalToDateRange('today');
 
-    expectIso(startDate, '2024-03-10T08:00:00.000Z');
-    expectIso(endDate, '2024-03-11T07:59:59.999Z');
+    expectIso(startDate, '2024-03-10T07:00:00.000Z');
+    expectIso(endDate, '2024-03-11T06:59:59.999Z');
+    expect(endDate?.toISOString()).not.toEqual('2024-03-11T07:59:59.999Z');
+    expect(dateToMatchingInterval('2024-03-10T07:00:00.000Z')).toEqual('today');
+    expect(dateToMatchingInterval('2024-03-11T06:59:59.999Z')).toEqual('today');
   });
 
   it('REQ-6 dateToMatchingInterval classifies visits using local calendar-day boundaries', () => {
