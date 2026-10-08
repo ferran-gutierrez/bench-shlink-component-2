@@ -283,19 +283,39 @@ describe('local timezone day boundaries (bench-shlink-component-2-20261008-sfbc)
     },
   );
 
-  it('REQ-5 intervalToDateRange(today) covers the full local day on DST spring-forward', () => {
-    const springForwardNow = '2024-03-10T12:00:00.000Z';
-    const laOffsetAfterSpringForward = 420;
-    useFixedTimeAndOffset(springForwardNow, laOffsetAfterSpringForward);
+  it.each([
+    {
+      label: 'DST spring-forward (UTC−7 at 2024-03-10T12:00:00.000Z)',
+      isoNow: '2024-03-10T12:00:00.000Z',
+      offsetMinutes: 420,
+      expectedStart: '2024-03-10T07:00:00.000Z',
+      expectedEnd: '2024-03-11T06:59:59.999Z',
+      obsoleteSpecEnd: '2024-03-11T07:59:59.999Z',
+    },
+    {
+      label: 'DST fall-back (UTC−8 at 2024-11-03T12:00:00.000Z)',
+      isoNow: '2024-11-03T12:00:00.000Z',
+      offsetMinutes: 480,
+      expectedStart: '2024-11-03T08:00:00.000Z',
+      expectedEnd: '2024-11-04T07:59:59.999Z',
+      obsoleteSpecEnd: undefined,
+    },
+  ])(
+    'REQ-5 intervalToDateRange(today) covers the full local day when $label',
+    ({ isoNow, offsetMinutes, expectedStart, expectedEnd, obsoleteSpecEnd }) => {
+      useFixedTimeAndOffset(isoNow, offsetMinutes);
 
-    const { startDate, endDate } = intervalToDateRange('today');
+      const { startDate, endDate } = intervalToDateRange('today');
 
-    expectIso(startDate, '2024-03-10T07:00:00.000Z');
-    expectIso(endDate, '2024-03-11T06:59:59.999Z');
-    expect(endDate?.toISOString()).not.toEqual('2024-03-11T07:59:59.999Z');
-    expect(dateToMatchingInterval('2024-03-10T07:00:00.000Z')).toEqual('today');
-    expect(dateToMatchingInterval('2024-03-11T06:59:59.999Z')).toEqual('today');
-  });
+      expectIso(startDate, expectedStart);
+      expectIso(endDate, expectedEnd);
+      if (obsoleteSpecEnd) {
+        expect(endDate?.toISOString()).not.toEqual(obsoleteSpecEnd);
+      }
+      expect(dateToMatchingInterval(expectedStart)).toEqual('today');
+      expect(dateToMatchingInterval(expectedEnd)).toEqual('today');
+    },
+  );
 
   it('REQ-6 dateToMatchingInterval classifies visits using local calendar-day boundaries', () => {
     useFixedTimeAndOffset(laSummerNow, laSummerOffsetMinutes);
