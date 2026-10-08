@@ -86,4 +86,14 @@ describe('<RedirectRuleCard />', () => {
     await user.click(screen.getByLabelText('Edit rule with priority 3'));
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
   });
+
+  it('REQ-7 renders browser condition using the stored match value', () => {
+    setUp({
+      redirectRule: fromPartial({
+        conditions: [{ type: 'browser', matchValue: 'chrome', matchKey: null }],
+      }),
+    });
+
+    expect(screen.getByText('Browser is chrome')).toBeInTheDocument();
+  });
 });

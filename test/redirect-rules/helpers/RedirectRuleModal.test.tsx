@@ -20,6 +20,7 @@ type SetUpOptions = {
   advancedQueryRedirectConditions?: boolean;
   desktopDeviceTypes?: boolean;
   dateRedirectConditions?: boolean;
+  browserRedirectConditions?: boolean;
 };
 
 describe('<RedirectRuleModal />', () => {
@@ -31,6 +32,7 @@ describe('<RedirectRuleModal />', () => {
     advancedQueryRedirectConditions = true,
     desktopDeviceTypes = true,
     dateRedirectConditions = true,
+    browserRedirectConditions = true,
   }: SetUpOptions) => renderWithEvents(
     <TestModalWrapper
       renderModal={(args) => (
@@ -41,6 +43,7 @@ describe('<RedirectRuleModal />', () => {
             advancedQueryRedirectConditions,
             desktopDeviceTypes,
             dateRedirectConditions,
+            browserRedirectConditions,
           })}
         >
           <RedirectRuleModal {...args} onSave={onSave} initialData={initialData} />
@@ -237,6 +240,7 @@ describe('<RedirectRuleModal />', () => {
       geolocationRedirectCondition: true,
       advancedQueryRedirectConditions: true,
       dateRedirectConditions: true,
+      browserRedirectConditions: true,
       expectedOptions: [
         'Device',
         'Language',
@@ -248,6 +252,7 @@ describe('<RedirectRuleModal />', () => {
         'City name (geolocation)',
         'Before date',
         'After date',
+        'Browser',
       ] as const,
     },
   ])('displays only supported options', async ({ expectedOptions, ...features }) => {
@@ -293,5 +298,95 @@ describe('<RedirectRuleModal />', () => {
     options.forEach((option, index) => {
       expect(option).toHaveTextContent(expectedOptions[index]);
     });
+  });
+
+  it('REQ-2 omits Browser from condition types when browserRedirectConditions is disabled', async () => {
+    const { user } = setUp({
+      browserRedirectConditions: false,
+      ipRedirectCondition: true,
+      geolocationRedirectCondition: true,
+      advancedQueryRedirectConditions: true,
+      dateRedirectConditions: true,
+    });
+
+    await addConditionWithType(user, 'language');
+    const typeSelectOptions = screen.getAllByLabelText('Type:').flatMap(
+      (select) => Array.from(select.querySelectorAll('option')).map((option) => option.textContent),
+    );
+
+    expect(typeSelectOptions).not.toContain('Browser');
+  });
+
+  it('REQ-3 lists Browser as the last condition type when all redirect condition features are enabled', async () => {
+    const { user } = setUp({
+      ipRedirectCondition: true,
+      geolocationRedirectCondition: true,
+      advancedQueryRedirectConditions: true,
+      dateRedirectConditions: true,
+      browserRedirectConditions: true,
+    });
+
+    await addConditionWithType(user, 'language');
+    const [typeSelect] = screen.getAllByLabelText('Type:').reverse();
+    const optionLabels = Array.from(typeSelect.querySelectorAll('option')).map((option) => option.textContent);
+
+    expect(optionLabels.at(-1)).toBe('Browser');
+    expect(optionLabels.slice(-3)).toEqual(['Before date', 'After date', 'Browser']);
+  });
+
+  it('REQ-4 shows Browser select with options in the documented order when type is browser', async () => {
+    const { user } = setUp({});
+    const expectedBrowsers = [
+      ['chrome', 'Google Chrome'],
+      ['firefox', 'Mozilla Firefox'],
+      ['edge', 'Microsoft Edge'],
+      ['safari', 'Safari'],
+      ['opera', 'Opera'],
+      ['android_browser', 'Android browser'],
+    ] as const;
+
+    await addConditionWithType(user, 'browser');
+    const browserSelect = screen.getByLabelText('Browser:');
+    const options = browserSelect.querySelectorAll('option');
+
+    expect(options).toHaveLength(expectedBrowsers.length + 1);
+    expectedBrowsers.forEach(([value, label], index) => {
+      expect(options[index + 1]).toHaveValue(value);
+      expect(options[index + 1]).toHaveTextContent(label);
+    });
+  });
+
+  it('REQ-5 persists browser condition with mozilla firefox when form is submitted', async () => {
+    const initialData: ShlinkRedirectRuleData = {
+      longUrl: 'https://example.com',
+      conditions: [{ type: 'device', matchValue: 'android', matchKey: null }],
+    };
+    const { user } = setUp({ initialData });
+
+    await waitFor(() => expect(screen.getByLabelText('Long URL:')).toBeInTheDocument());
+
+    await addConditionWithType(user, 'browser');
+    await user.selectOptions(screen.getByLabelText('Browser:'), ['firefox']);
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    expect(onSave).toHaveBeenCalledWith({
+      longUrl: 'https://example.com',
+      conditions: [
+        { type: 'device', matchValue: 'android', matchKey: null },
+        { type: 'browser', matchValue: 'firefox', matchKey: null },
+      ],
+    });
+  });
+
+  it('REQ-6 shows Browser select with safari selected when editing a browser condition', async () => {
+    setUp({
+      initialData: {
+        longUrl: 'https://example.com',
+        conditions: [{ type: 'browser', matchValue: 'safari', matchKey: null }],
+      },
+    });
+
+    await waitFor(() => expect(screen.getByLabelText('Browser:')).toBeInTheDocument());
+    expect(screen.getByLabelText('Browser:')).toHaveValue('safari');
   });
 });
