@@ -1,6 +1,6 @@
 import { endOfDay, format, formatISO, startOfDay, subDays } from 'date-fns';
+import { afterEach, beforeEach, vi } from 'vitest';
 import { now, parseDate } from '../../../../src/utils/dates/helpers/date';
-import type { DateInterval } from '../../../../src/utils/dates/helpers/dateIntervals';
 import {
   calcPrevDateRange,
   dateRangeDaysDiff,
@@ -11,6 +11,7 @@ import {
   rangeIsInterval,
   rangeOrIntervalToString,
   toDateRange,
+  type DateInterval,
 } from '../../../../src/utils/dates/helpers/dateIntervals';
 
 describe('date-types', () => {
@@ -200,6 +201,148 @@ describe('date-types', () => {
       [{ endDate: new Date() }, undefined],
     ])('returns the difference in days for a dateRange', (dateRange, expectedDays) => {
       expect(dateRangeDaysDiff(dateRange)).toEqual(expectedDays);
+    });
+  });
+
+  describe('REQ-5 local calendar day helpers', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-03-10T18:00:00.000Z'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('derives preset boundaries with date-fns startOfDay and endOfDay', () => {
+      const frozenNow = now();
+
+      expect(intervalToDateRange('today')).toEqual({
+        startDate: startOfDay(frozenNow),
+        endDate: endOfDay(frozenNow),
+      });
+      expect(intervalToDateRange('last365Days')).toEqual({
+        startDate: startOfDay(subDays(frozenNow, 365)),
+        endDate: endOfDay(frozenNow),
+      });
+    });
+  });
+
+  describe('REQ-6 UTC runtime preset intervals', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-06-14T15:30:00.000Z'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('matches startOfDay and endOfDay for today', () => {
+      const frozenNow = now();
+      const { startDate, endDate } = intervalToDateRange('today');
+
+      expect(startDate).toEqual(startOfDay(frozenNow));
+      expect(endDate).toEqual(endOfDay(frozenNow));
+    });
+
+    it('matches local calendar boundaries for yesterday and last 7 days', () => {
+      const frozenNow = now();
+
+      expect(intervalToDateRange('yesterday')).toEqual({
+        startDate: startOfDay(subDays(frozenNow, 1)),
+        endDate: endOfDay(subDays(frozenNow, 1)),
+      });
+      expect(intervalToDateRange('last7Days')).toEqual({
+        startDate: startOfDay(subDays(frozenNow, 7)),
+        endDate: endOfDay(frozenNow),
+      });
+    });
+
+    it('classifies timestamps with dateToMatchingInterval using the same boundaries', () => {
+      const frozenNow = now();
+
+      expect(dateToMatchingInterval(frozenNow)).toEqual('today');
+      expect(dateToMatchingInterval(startOfDay(subDays(frozenNow, 1)))).toEqual('yesterday');
+      expect(dateToMatchingInterval(startOfDay(subDays(frozenNow, 7)))).toEqual('last7Days');
+      expect(dateToMatchingInterval(subDays(frozenNow, 400))).toEqual('all');
+    });
+  });
+
+  describe('REQ-7 timezone regression reference bounds', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    const legacyUtcDayStart = (date: Date): Date =>
+      new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+
+    const legacyUtcDayEnd = (date: Date): Date => new Date(legacyUtcDayStart(date).getTime() + DAY_MS - 1);
+
+    type LocalDayBounds = { start: Date; end: Date };
+
+    const assertLegacyDiffersFromLocal = (frozenNow: Date, localBounds: LocalDayBounds) => {
+      expect(legacyUtcDayStart(frozenNow).toISOString()).not.toEqual(localBounds.start.toISOString());
+      expect(legacyUtcDayEnd(frozenNow).toISOString()).not.toEqual(localBounds.end.toISOString());
+    };
+
+    it('America/Los_Angeles — June 14 2024 10:00 local today/yesterday/last 7 days', () => {
+      const frozenNow = new Date('2024-06-14T17:00:00.000Z');
+      const today: LocalDayBounds = {
+        start: new Date('2024-06-14T07:00:00.000Z'),
+        end: new Date('2024-06-15T06:59:59.999Z'),
+      };
+      const yesterday: LocalDayBounds = {
+        start: new Date('2024-06-13T07:00:00.000Z'),
+        end: new Date('2024-06-14T06:59:59.999Z'),
+      };
+      const last7Days: LocalDayBounds = {
+        start: new Date('2024-06-07T07:00:00.000Z'),
+        end: today.end,
+      };
+
+      assertLegacyDiffersFromLocal(frozenNow, today);
+
+      expect(yesterday.end.getTime()).toBe(today.start.getTime() - 1);
+      expect(last7Days.start.toISOString()).toEqual('2024-06-07T07:00:00.000Z');
+    });
+
+    it('America/Los_Angeles — DST spring-forward day (March 10 2024)', () => {
+      const frozenNow = new Date('2024-03-10T18:00:00.000Z');
+      const today: LocalDayBounds = {
+        start: new Date('2024-03-10T08:00:00.000Z'),
+        end: new Date('2024-03-11T06:59:59.999Z'),
+      };
+
+      assertLegacyDiffersFromLocal(frozenNow, today);
+    });
+
+    it('Pacific/Auckland — June 14 2024 10:00 local today/yesterday/last 7 days', () => {
+      const frozenNow = new Date('2024-06-13T22:00:00.000Z');
+      const today: LocalDayBounds = {
+        start: new Date('2024-06-13T12:00:00.000Z'),
+        end: new Date('2024-06-14T11:59:59.999Z'),
+      };
+      const yesterday: LocalDayBounds = {
+        start: new Date('2024-06-12T12:00:00.000Z'),
+        end: new Date('2024-06-13T11:59:59.999Z'),
+      };
+      const last7Days: LocalDayBounds = {
+        start: new Date('2024-06-06T12:00:00.000Z'),
+        end: today.end,
+      };
+
+      assertLegacyDiffersFromLocal(frozenNow, today);
+      expect(yesterday.end.getTime()).toBe(today.start.getTime() - 1);
+      expect(last7Days.start.toISOString()).toEqual('2024-06-06T12:00:00.000Z');
+    });
+
+    it('classifies a visit at the documented LA local-day start as today when the clock is frozen', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-06-14T17:00:00.000Z'));
+
+      const laLocalTodayStart = new Date('2024-06-14T07:00:00.000Z');
+      expect(dateToMatchingInterval(new Date(laLocalTodayStart.getTime() + 60_000))).toEqual('today');
+
+      vi.useRealTimers();
     });
   });
 });
