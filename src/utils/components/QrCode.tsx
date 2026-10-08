@@ -1,0 +1,97 @@
+import type { DrawType } from 'qr-code-styling';
+import QRCodeStyling from 'qr-code-styling';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import type { QrCodeFormat, QrCodeSettings, QrErrorCorrection } from '../../settings';
+
+export type QrCodeProps = Omit<QrCodeSettings, 'format' | 'logo'> & {
+  data: string;
+  drawType?: DrawType;
+  logo?: string;
+};
+
+export type QrRef = {
+  download: (name: string, format: QrCodeFormat) => void;
+  getDataUri: (format: QrCodeFormat) => Promise<string>;
+};
+
+function errorCorrectionToLogoSize(errorCorrection: QrErrorCorrection): number {
+  switch (errorCorrection) {
+    case 'L':
+      return 1;
+    case 'M':
+      return 0.5;
+    default:
+      return 0.3;
+  }
+}
+
+export const QrCode = forwardRef<QrRef, QrCodeProps>(
+  ({ data, color, bgColor, margin, errorCorrection, size, drawType, logo }, ref) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const qrCodeRef = useRef(new QRCodeStyling());
+    const download = useCallback(
+      (name: string, format: QrCodeFormat) => qrCodeRef.current.download({ name, extension: format }),
+      [],
+    );
+    const getDataUri = useCallback(
+      (format: QrCodeFormat) =>
+        new Promise<string>((resolve, reject) => {
+          const rawDataPromise = qrCodeRef.current.getRawData(format);
+          const reader = new FileReader();
+
+          reader.onload = () => {
+            const { result } = reader;
+            if (typeof result === 'string') {
+              resolve(result);
+            }
+          };
+          reader.onerror = reject;
+
+          rawDataPromise.then((blob) => {
+            if (blob instanceof Blob) {
+              reader.readAsDataURL(blob);
+            } else {
+              reject(new Error('QR code image blob not available'));
+            }
+          });
+        }),
+      [],
+    );
+
+    // Expose the download and getDataUri methods via provided ref
+    useImperativeHandle(ref, () => ({ download, getDataUri }), [download, getDataUri]);
+
+    useEffect(() => {
+      const element = containerRef.current!;
+      qrCodeRef.current.append(element);
+    }, []);
+
+    useEffect(() => {
+      qrCodeRef.current.update({
+        type: drawType,
+        data,
+        width: size + margin,
+        height: size + margin,
+        margin,
+        dotsOptions: { color },
+        backgroundOptions: { color: bgColor },
+        qrOptions: { errorCorrectionLevel: errorCorrection },
+        imageOptions: {
+          margin: 5,
+          imageSize: errorCorrectionToLogoSize(errorCorrection),
+        },
+        image: logo,
+      });
+    }, [bgColor, color, data, drawType, errorCorrection, logo, margin, size]);
+
+    return (
+      <>
+        <style
+          // This ensures the canvas never grows more than 100%
+          dangerouslySetInnerHTML={{ __html: '#qr-code-canvas-container canvas { max-width: 100% }' }}
+        />
+        <div ref={containerRef} id="qr-code-canvas-container" />
+      </>
+    );
+  },
+);

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+docker compose exec -it shlink_web_component /bin/sh -c "$*"
