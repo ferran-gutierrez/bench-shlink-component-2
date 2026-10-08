@@ -57,11 +57,14 @@ describe('dateIntervals local timezone', () => {
       expectIntervalRange('last365Days', '2023-06-15T07:00:00.000Z', '2024-06-15T06:59:59.999Z');
     });
 
-    it('REQ-7 dateToMatchingInterval maps visit instants to local calendar intervals', () => {
+    it('REQ-7 dateToMatchingInterval maps today, yesterday, and last7Days visits', () => {
       expect(dateToMatchingInterval('2024-06-14T20:00:00.000Z')).toEqual('today');
       expect(dateToMatchingInterval('2024-06-13T20:00:00.000Z')).toEqual('yesterday');
-      expect(dateToMatchingInterval('2024-06-07T07:00:00.000Z')).toEqual('last7Days');
       expect(dateToMatchingInterval('2024-06-07T20:00:00.000Z')).toEqual('last7Days');
+    });
+
+    it('REQ-7 dateToMatchingInterval maps the first local day in last7Days and the prior local day', () => {
+      expect(dateToMatchingInterval('2024-06-07T07:00:00.000Z')).toEqual('last7Days');
       expect(dateToMatchingInterval('2024-06-06T20:00:00.000Z')).toEqual('last30Days');
     });
   });
